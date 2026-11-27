@@ -1,0 +1,75 @@
+version: '3.8'
+
+networks:
+  shared_network:
+    external: true
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hrms_db
+    restart: always
+    networks:
+      - shared_network
+    environment:
+      POSTGRES_USER: hrms_admin
+      POSTGRES_PASSWORD: ${DB_PASS:?Set DB_PASS in the stack environment variables}
+      POSTGRES_DB: hrms_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - hrms_pgdata:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer:latest
+    container_name: hrms_db_admin
+    restart: always
+    networks:
+      - shared_network
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hrms_backend
+    restart: always
+    networks:
+      - shared_network
+    ports:
+      - "8001:8000"
+    environment:
+      DB_HOST: hrms_db
+      DB_PORT: 5432
+      DB_USER: hrms_admin
+      DB_PASS: ${DB_PASS:?Set DB_PASS in the stack environment variables}
+      DB_NAME: hrms_dev
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in the stack environment variables}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in the stack environment variables}
+      NODE_ENV: ${NODE_ENV:-production}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@hrms.local}
+      ADMIN_NAME: ${ADMIN_NAME:-HRMS Administrator}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set a unique ADMIN_PASSWORD of at least 12 characters}
+    depends_on:
+      - postgres
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?Set VITE_API_BASE_URL in the stack environment variables}
+    container_name: hrms_frontend
+    restart: always
+    networks:
+      - shared_network
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  hrms_pgdata:
